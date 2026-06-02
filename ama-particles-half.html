@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ama — particles</title>
+<style>
+  :root{ --bg:#F7EEE0; --logo:#CCC1B0; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg);
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden; font-family:Georgia,"Times New Roman",serif;
+  }
+  .stage{ position:relative; width:1440px; height:900px; transform-origin:center center; background:var(--bg); }
+  .stage canvas{ display:block; width:1440px; height:900px; }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage"><canvas id="c"></canvas></div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---- Артборд / композиция -------------------------------------------------
+  const WORLD_W = 1440, WORLD_H = 900;     // размер фрейма
+  const LOGO_W  = 1360, LOGO_H  = 520;     // размер логотипа (×2)
+  const LOGO_X  = (WORLD_W - LOGO_W) / 2;  // = 40   (фиксированное место)
+  const LOGO_Y  = (WORLD_H - LOGO_H) / 2;  // = 190
+  const COLOR   = "#CCC1B0";               // цвет частиц (повышенный контраст)
+
+  const stage  = document.getElementById("stage");
+  const canvas = document.getElementById("c");
+  const ctx    = canvas.getContext("2d", { alpha: true });
+
+  // SVG логотипа "Ama" (3 path) — маска формы.
+  const SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="681" height="257" viewBox="0 0 681 257">
+<path fill="${COLOR}" d="M680.401 70.9633C680.401 76.6563 678.882 81.5902 676.605 87.6628C661.425 129.411 630.304 209.113 626.129 224.294C626.509 225.054 627.647 225.813 628.406 225.813C635.617 225.813 652.696 209.113 669.774 189.377L675.846 197.348C656.111 226.192 625.37 256.555 610.569 256.555C601.081 256.555 591.973 251.241 591.973 240.994C591.973 237.958 594.629 230.367 598.424 220.12L611.328 187.1L609.43 186.341C585.141 220.499 546.43 256.555 529.352 256.555C511.894 254.278 502.786 238.717 502.786 218.981C502.786 159.774 563.509 67.5475 621.955 67.5475C631.063 67.5475 642.449 70.2043 650.039 74.7586C652.316 68.3066 654.214 62.9931 655.732 58.0592C658.388 57.6797 659.527 57.6797 661.425 57.6797C672.81 57.6797 680.401 63.3727 680.401 70.9633ZM545.292 225.433C560.093 225.433 598.045 195.45 626.129 139.279L641.31 99.8078C631.443 92.2171 618.918 86.5242 601.081 86.5242C568.442 86.5242 535.804 166.606 535.804 204.559C535.804 216.704 540.358 225.433 545.292 225.433Z"/>
+<path fill="${COLOR}" d="M509.02 189.405L515.092 197.375C495.357 224.322 468.412 255.823 445.261 255.823C433.496 255.823 430.839 248.991 430.839 242.16C430.839 231.153 478.659 110.082 479.797 101.733C478.279 95.2807 474.863 91.1059 469.171 91.1059C457.026 91.1059 420.213 124.125 374.67 220.147L361.767 252.787C359.49 253.166 358.351 253.166 357.972 253.166C344.688 253.166 339.375 248.232 339.375 239.503C339.375 234.949 340.893 230.015 344.688 219.767C354.176 193.58 388.713 106.667 388.713 101.733C386.815 94.5216 383.399 91.1059 378.086 91.1059C361.767 91.4854 321.158 138.168 280.929 225.84C277.134 235.708 273.339 245.196 270.682 252.787C269.544 253.166 267.646 253.166 266.887 253.166C253.224 253.166 248.291 247.853 248.291 239.124C248.291 234.949 249.429 230.774 251.327 224.701C264.989 185.23 294.212 108.944 296.869 97.5579C294.592 94.5216 292.694 93.383 289.279 93.383C282.827 93.383 273.718 105.528 266.507 117.673L258.538 112.36C272.58 80.8585 286.622 69.852 300.664 69.852C311.67 69.852 320.399 75.545 328.369 90.3468L298.387 164.735L301.044 165.874C337.098 99.4556 367.839 67.1953 390.99 67.1953C408.827 67.1953 417.936 80.8585 417.936 92.624C417.936 99.4556 395.544 151.072 389.472 164.735L392.128 165.874C433.496 89.5877 463.478 67.1953 481.695 67.1953C498.773 67.1953 509.4 79.7199 509.4 93.383C509.4 106.287 475.243 193.58 465.375 223.942C465.755 224.701 466.893 225.46 468.032 225.46C474.863 225.46 494.219 207.243 509.02 189.405Z"/>
+<path fill="${COLOR}" d="M275.531 14.4222L261.109 54.2731L206.458 228.858C210.253 232.653 212.531 234.172 220.88 236.449L231.507 239.485L228.091 250.491H132.452L135.868 239.485L146.874 236.828C162.814 233.033 168.127 230.376 174.958 208.363L192.037 153.331C175.717 154.47 157.121 155.229 142.699 155.229C137.006 155.229 127.139 155.229 119.548 154.849C118.03 157.126 116.512 159.024 114.994 160.922C99.0544 181.417 75.9038 214.056 66.4158 231.515C69.8315 234.172 72.8676 235.69 78.5604 236.828L90.3255 239.485L86.9098 250.112L0 255.805L3.41567 244.798C25.4278 236.828 41.3676 223.924 61.8616 200.014C87.6689 169.271 140.042 103.992 171.163 68.6954C219.362 14.0427 239.856 0 251.621 0C262.627 0 270.597 2.27718 275.531 14.4222ZM196.591 140.047L232.645 24.6696C209.494 45.1644 172.681 87.672 130.175 141.945C147.253 140.807 168.127 140.047 196.591 140.047Z"/>
+</svg>`;
+
+  // ---- HiDPI + масштабирование ----------------------------------------------
+  let dpr = Math.min(window.devicePixelRatio || 1, 2);
+  function sizeCanvas(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width  = Math.round(WORLD_W * dpr);
+    canvas.height = Math.round(WORLD_H * dpr);
+  }
+  function fitStage(){
+    const s = Math.min(window.innerWidth / WORLD_W, window.innerHeight / WORLD_H);
+    stage.style.transform = `scale(${s})`;
+  }
+  sizeCanvas(); fitStage();
+  window.addEventListener("resize", () => { sizeCanvas(); fitStage(); buildSprite(); });
+
+  // ---- Спрайт частицы -------------------------------------------------------
+  const hexToRgb = h => { h = h.replace('#',''); return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]; };
+  let sprite = document.createElement("canvas");
+  function buildSprite(){
+    const SR = Math.max(10, Math.ceil(10 * dpr));
+    sprite.width = sprite.height = SR * 2;
+    const s = sprite.getContext("2d");
+    s.clearRect(0,0,sprite.width,sprite.height);
+    const [R,G,B] = hexToRgb(COLOR);
+    const g = s.createRadialGradient(SR, SR, 0, SR, SR, SR);
+    g.addColorStop(0.00, `rgb(${R},${G},${B})`);
+    g.addColorStop(0.82, `rgb(${R},${G},${B})`);    // плотное ядро -> чёткий круг
+    g.addColorStop(1.00, `rgba(${R},${G},${B},0)`); // тонкое сглаживание края
+    s.fillStyle = g;
+    s.beginPath(); s.arc(SR, SR, SR, 0, Math.PI*2); s.fill();
+  }
+  buildSprite();
+
+  // ---- Частицы --------------------------------------------------------------
+  let particles = [];
+  const MAX_PARTICLES = 13000;         // 13k частиц
+  const rnd = (a,b) => a + Math.random()*(b-a);
+
+  function sampleParticles(img){
+    const SS = 2;
+    const off = document.createElement("canvas");
+    off.width = LOGO_W * SS; off.height = LOGO_H * SS;
+    const octx = off.getContext("2d");
+    const scale = Math.min(LOGO_W / 681, LOGO_H / 257);
+    const dw = 681 * scale, dh = 257 * scale;
+    const ox = (LOGO_W - dw) / 2, oy = (LOGO_H - dh) / 2;
+    octx.drawImage(img, ox*SS, oy*SS, dw*SS, dh*SS);
+    const data = octx.getImageData(0,0,off.width,off.height).data;
+
+    const step = 2;
+    const cand = [];
+    for (let y = 0; y < LOGO_H; y += step){
+      for (let x = 0; x < LOGO_W; x += step){
+        const a = data[((y*SS)*off.width + (x*SS)) * 4 + 3];
+        if (a > 110){
+          cand.push([ LOGO_X + x + rnd(-step*0.6, step*0.6),
+                      LOGO_Y + y + rnd(-step*0.6, step*0.6) ]);
+        }
+      }
+    }
+    for (let i = cand.length-1; i>0; i--){ const j=(Math.random()*(i+1))|0; const t=cand[i]; cand[i]=cand[j]; cand[j]=t; }
+    const used = cand.slice(0, MAX_PARTICLES);
+
+    particles = used.map(([hx, hy]) => {
+      const t = Math.random();
+      const size = 0.275 + t*t*1.2;
+      const alpha = 0.6 + Math.random()*0.4 + (size>2.0 ? 0.05 : 0);
+      // псевдо-глубина: треугольное распределение -> большинство у плоскости буквы,
+      // часть вынесена вперёд/назад -> «толщина» облака
+      const z = (Math.random() + Math.random() - 1);   // -1..1, пик в 0
+      return {
+        hx, hy,                 // фиксированный дом (форма логотипа на месте)
+        x: hx, y: hy,           // дефолт: логотип собран
+        vx: 0, vy: 0,
+        z,                      // глубина
+        zf: rnd(0.4,1.2), zph: rnd(0,6.2832),        // лёгкое «дыхание» по глубине
+        size, alpha: Math.min(alpha, 1),
+        swirl: Math.random() < 0.5 ? 1 : -1,
+        swirlMag: rnd(0.6, 1.5),                      // разброс силы завихрения
+        jitter: rnd(0.65, 1.4),                       // разброс радиуса влияния
+        dfreq: rnd(0.5, 1.5), dphase: rnd(0,6.2832),  // плавное блуждание направления
+        dspread: rnd(0.45, 0.95),                     // амплитуда хаотичности направления
+        phase: rnd(0, 6.2832),                        // фаза турбулентности "ветра"
+        fx: rnd(0.30,1.00), fy: rnd(0.30,1.00),       // частоты хаотичного дрейфа
+        fx2: rnd(0.60,1.70), fy2: rnd(0.60,1.70),
+        ph: rnd(0,6.2832), ph2: rnd(0,6.2832)
+      };
+    });
+    // сортировка по глубине: дальние рисуются первыми -> верное перекрытие
+    particles.sort((a, b) => a.z - b.z);
+  }
+
+  // ---- Указатель ------------------------------------------------------------
+  const pointer = { x: WORLD_W/2, y: WORLD_H/2, px: WORLD_W/2, py: WORLD_H/2, active: false };
+  function toWorld(clientX, clientY){
+    const r = canvas.getBoundingClientRect();
+    return { x: (clientX-r.left)/r.width*WORLD_W, y: (clientY-r.top)/r.height*WORLD_H };
+  }
+  stage.addEventListener("pointermove", e => {
+    const p = toWorld(e.clientX, e.clientY);
+    pointer.x = p.x; pointer.y = p.y; pointer.active = true;
+  });
+  stage.addEventListener("pointerenter", () => { pointer.active = true; });
+  stage.addEventListener("pointerleave", () => { pointer.active = false; });
+
+  // ---- Параметры поля -------------------------------------------------------
+  const BASE_R   = 540;     // радиус ореола вдвое -> разлёт дальше (скорость та же)
+  const AURA_AMP = 0.60;    // сильнее неровность ореола (хаотичнее)
+  const FORCE    = 2.0;     // мягкий толчок
+  const SWIRL    = 0.55;    // завихрения
+  const SPRING   = 0.010;   // мягкий, неспешный возврат
+  const FRICTION = 0.930;   // вязкость -> тягучее, спокойное движение
+  const LEAD     = 1.5;     // меньше «опережения» -> отклик мягче
+  const MAGNET   = 0.15;    // совсем лёгкое притяжение к курсору
+  const MAG_R    = 800;     // радиус магнитного поля (под больший разлёт)
+  const MAXV     = 3.5;     // ограничение скорости -> частицы не «стреляют»
+  const IDLE_CHAOS  = 0.016; // лёгкий хаотичный дрейф в покое
+  const FOCUS_CHAOS = 0.005; // совсем слабый дрейф при активном курсоре
+  // псевдо-3D глубина
+  const PARALLAX   = 48;     // сила параллакса по глубине (px)
+  const DEPTH_SIZE = 0.55;   // влияние глубины на размер частицы
+  const DA_MIN = 0.34, DA_MAX = 1.0; // диапазон прозрачности: даль -> ближе
+
+  function aura(angle, t){
+    return Math.sin(angle*3 + t*0.9) * 0.5
+         + Math.sin(angle*5 - t*1.27 + 1.3) * 0.30
+         + Math.sin(angle*2 + t*0.53 + 2.1) * 0.20;
+  }
+
+  let smVx = 0, smVy = 0, smSpeed = 0, engage = 0;
+  let lookX = 0, lookY = 0;   // вектор «взгляда» для параллакса по глубине
+
+  // ---- Цикл -----------------------------------------------------------------
+  let t0 = performance.now();
+  function frame(now){
+    const t = (now - t0) / 1000;
+
+    smVx += ((pointer.x - pointer.px) - smVx) * 0.25;
+    smVy += ((pointer.y - pointer.py) - smVy) * 0.25;
+    pointer.px = pointer.x; pointer.py = pointer.y;
+    smSpeed += (Math.hypot(smVx, smVy) - smSpeed) * 0.2;
+    const speedBoost = Math.min(smSpeed / 60, 0.30);
+
+    engage += ((pointer.active ? 1 : 0) - engage) * 0.05;
+    const chaos = FOCUS_CHAOS + (IDLE_CHAOS - FOCUS_CHAOS) * (1 - engage);
+
+    const fx = pointer.x + smVx * LEAD;
+    const fy = pointer.y + smVy * LEAD;
+    const radial = BASE_R * (1 + speedBoost);
+
+    // вектор взгляда: следует за курсором, в покое — медленно покачивается
+    let tlx, tly;
+    if (pointer.active){
+      tlx = (pointer.x - WORLD_W/2) / (WORLD_W/2);
+      tly = (pointer.y - WORLD_H/2) / (WORLD_H/2);
+    } else {
+      tlx = Math.sin(t * 0.15) * 0.5;
+      tly = Math.cos(t * 0.12) * 0.4;
+    }
+    lookX += (tlx - lookX) * 0.022;
+    lookY += (tly - lookY) * 0.022;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, WORLD_W, WORLD_H);
+
+    for (let i = 0; i < particles.length; i++){
+      const p = particles[i];
+
+      if (pointer.active){
+        const dx = p.x - fx, dy = p.y - fy;
+        const d  = Math.hypot(dx, dy) || 0.0001;
+        const nx = dx / d, ny = dy / d;
+        const ang = Math.atan2(dy, dx);
+        const R = radial * (1 + AURA_AMP * aura(ang, t)) * p.jitter;
+
+        if (d < R){                       // отталкивание (разлёт)
+          const u = 1 - d / R;
+          const f = u * u * (3 - 2 * u);   // smootherstep -> плавный профиль силы
+          // ближние частицы (z>0) реагируют сильнее, дальние — слабее
+          const push = f * FORCE * (0.7 + (p.z + 1) * 0.35);
+          // плавно блуждающее направление толчка -> хаотичный, неровный разлёт
+          const aj = Math.sin(t * p.dfreq + p.dphase) * p.dspread;
+          const ca = Math.cos(aj), sa = Math.sin(aj);
+          const rnx = nx * ca - ny * sa;
+          const rny = nx * sa + ny * ca;
+          p.vx += rnx * push;  p.vy += rny * push;
+          // завихрение с индивидуальным разбросом
+          p.vx += -rny * push * SWIRL * p.swirl * p.swirlMag;
+          p.vy +=  rnx * push * SWIRL * p.swirl * p.swirlMag;
+        }
+        if (d < MAG_R){                   // лёгкое притяжение
+          const mf = (1 - d / MAG_R) * MAGNET;
+          p.vx -= nx * mf; p.vy -= ny * mf;
+        }
+      }
+
+      // возврат в форму логотипа (фиксированный дом)
+      const dxh = p.hx - p.x, dyh = p.hy - p.y;
+      p.vx += dxh * SPRING; p.vy += dyh * SPRING;
+
+      // турбулентность "ветра" для разлетевшихся частиц
+      const disp = Math.hypot(dxh, dyh);
+      if (disp > 2){
+        const k = Math.min(disp / 110, 1);
+        p.vx += Math.cos(t*0.5 + p.phase) * 0.035 * k;
+        p.vy += (Math.sin(t*0.7 + p.phase*1.7) * 0.035 - 0.02) * k;
+      }
+
+      // лёгкое хаотичное "дыхание" в покое
+      p.vx += (Math.sin(t*p.fx + p.ph) + Math.sin(t*p.fx2 + p.ph2)) * chaos;
+      p.vy += (Math.cos(t*p.fy + p.ph) + Math.cos(t*p.fy2 + p.ph2)) * chaos;
+
+      p.vx *= FRICTION; p.vy *= FRICTION;
+      // вязкость: ограничиваем скорость, чтобы движение оставалось тягучим
+      const sp2 = p.vx*p.vx + p.vy*p.vy;
+      if (sp2 > MAXV*MAXV){ const s = MAXV / Math.sqrt(sp2); p.vx *= s; p.vy *= s; }
+      p.x += p.vx; p.y += p.vy;
+
+      // ---- псевдо-3D проекция: глубина -> размер, прозрачность, параллакс ----
+      const zEff = p.z + Math.sin(t * p.zf + p.zph) * 0.06;   // лёгкое «дыхание» по z
+      const dScale = 1 + zEff * DEPTH_SIZE;
+      const dAlpha = DA_MIN + (DA_MAX - DA_MIN) * ((zEff + 1) * 0.5);
+      const sx = p.x + zEff * PARALLAX * lookX;
+      const sy = p.y + zEff * PARALLAX * lookY;
+      const r = p.size * dScale;
+      ctx.globalAlpha = Math.min(p.alpha * dAlpha, 1);
+      ctx.drawImage(sprite, sx - r, sy - r, r*2, r*2);
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(frame);
+  }
+
+  // ---- Старт ----------------------------------------------------------------
+  const img = new Image();
+  img.onload = () => { sampleParticles(img); t0 = performance.now(); requestAnimationFrame(frame); };
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(SVG);
+})();
+</script>
+</body>
+</html>
